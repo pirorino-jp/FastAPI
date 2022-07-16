@@ -745,7 +745,7 @@ async def ConversationListSelect(request: Request,access_token: str,conversation
     try:
         subroutine = "ConversationListSelect"
         print("function :" + subroutine)
-        user = await check_token(access_token , 'access_token')
+        # user = await check_token(access_token , 'access_token')
 
         dicts = conversation_list.dict()
         values = {
@@ -753,16 +753,15 @@ async def ConversationListSelect(request: Request,access_token: str,conversation
             "user_id": dicts["user_id"],
             "to_user_id": dicts["to_user_id"]
         }
-        print("conversation_code length:" + str(len(dicts["conversation_code"])))
-        print("user_id:" + str(dicts["user_id"]))
-        print("to_user_id:" + str(dicts["to_user_id"]))
         now = datetime.now()
-        print(now.strftime('%Y%m%d%H%M%S'))
+        print("debug:" + now.strftime('%Y%m%d%H%M%S') + " conversation_code length:" + str(len(dicts["conversation_code"])) + " user_id:" + str(dicts["user_id"]) + " to_user_id:" + str(dicts["to_user_id"]))
 
         if len(values["conversation_code"]) != 0: # conversation_codeに値がある場合会話コードで検索する
             query = nbtt_conversation_lists.select().where(nbtt_conversation_lists.c.conversation_code == values["conversation_code"]).where(nbtt_conversation_lists.c.scheduled_end_timestamp > now).where(nbtt_conversation_lists.c.is_deleted == False)
+            print("function :" + subroutine + " query 1")
         elif len(values["conversation_code"]) == 0 and values["user_id"] != 0 : # conversation_codeに値がなく、user_idが0でない場合、受け取ったuser_idで検索する
             query = nbtt_conversation_lists.select().where(nbtt_conversation_lists.c.user_id == values["user_id"]).where(nbtt_conversation_lists.c.scheduled_end_timestamp > now).where(nbtt_conversation_lists.c.is_deleted == False)
+            print("function :" + subroutine + " query 2")
         elif len(values["conversation_code"]) == 0 and values["user_id"] == 0 and values["to_user_id"] != 0 : # conversation_codeに値がなく、user_idが0であり、to_user_idが0でない場合、受け取ったto_useridで検索する
                 # 2022/3/27 added start
                 # query = nbtt_conversation_lists.select().where(nbtt_conversation_lists.c.to_user_id == values["to_user_id"]).where(nbtt_conversation_lists.c.scheduled_end_timestamp > now).where(nbtt_conversation_lists.c.is_deleted == False)
@@ -782,11 +781,12 @@ async def ConversationListSelect(request: Request,access_token: str,conversation
                         FROM nbtt_conversation_list c INNER JOIN nbmt_users n \
                         WHERE c.to_user_id = n.user_id and c.scheduled_end_timestamp > %s and c.is_deleted == False"\
                     % (now,values["to_user_id"])
+                print("function :" + subroutine + " query 3")
                 # 2022/3/27 added end
         else:
             print("nbtt_conversation_lists..conversation_code ='' user_id = 0 to_user_id = 0") # converasation_codeが空で、ユーザIDが0の場合
             query = nbtt_conversation_lists.select()
-        print("query:" + str(query))
+        print(subroutine + " query4:" + str(query))
         resultset = await database.fetch_all(query)
         if len(resultset) > 0:
             print("resultset:" + str(resultset[0]["user_id"]))
@@ -823,19 +823,25 @@ async def ConversationListUpdate(request: Request,access_token: str,conversation
 
     transaction = await database.transaction()
     try:
-        query1 = "select * from nbtt_conversation_lists where conversation_code = '%s' and update_timestamp = '%s' for update" % (values["conversation_code"],values["update_timestamp"])
-        print("query1:" + query1)
-        resultset = await database.fetch_all(query1)
-        print("ret1:" + str(resultset))
+        subroutine = "ConversationListUpdate"
+        print("function :" + subroutine)
+        # user = await check_token(access_token , 'access_token')
+        # UserId = user.user_id
+        UserId = 1
+        now = datetime.now()
+        print(now.strftime('%Y%m%d%H%M%S'))
 
-        print("query2:start")
-        query2 = "update nbtt_conversation_lists set reservation_talking_category = '%s' ,update_timestamp= '%s' where conversation_code = '%s' and update_timestamp = '%s' returning conversation_code" % (values["reservation_talking_category"],now.strftime('%Y-%m-%d %H:%M:%S'),values["conversation_code"],values["update_timestamp"])
-        print("query2:" + query2)
-        ret = await database.execute(query2)
-        print("returning:" + str(ret))
-        if ret is None:
-            raise ValueError
-        await transaction.commit()
+        dicts = conversation_list.dict()
+        values = {
+            "conversation_code": dicts["conversation_code"],
+            "user_id": dicts["user_id"]
+        }
+
+        # conversation_codeのみでupdate対象を決定
+        query = nbtt_conversation_lists.update().where(nbtt_conversation_lists.c.conversation_code == values["conversation_code"]).values(reservation_talking_category="talking",update_timestamp=now,update_user_id=UserId)
+        print("query:" + str(query))
+        resultset = await database.execute(query)
+        # 本当はupdate件数をcheckしたいのだが、出す方法がない(ストアドが必要)
         return {"result": "update success"} # 正常更新完了
     except ValueError as v: # update失敗（対象なし）
         print("query:rollbacked")
